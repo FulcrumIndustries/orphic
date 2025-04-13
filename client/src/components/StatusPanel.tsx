@@ -14,6 +14,7 @@ interface StatusPanelProps {
   colorSchemeType?: string;
   baseColor?: string;
   mood?: string;
+  time?: string; // Optional time property from backend
 }
 
 interface TaskWithTime extends Task {
@@ -38,80 +39,115 @@ const StatusPanel = ({
   colorSchemeType,
   baseColor,
   mood,
+  time,
 }: StatusPanelProps) => {
   const [taskTimes, setTaskTimes] = useState<Record<number, string>>({});
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [totalTime, setTotalTime] = useState<string>("");
   const [currentStepTime, setCurrentStepTime] = useState<string | null>(null);
+  const [lastProgressValue, setLastProgressValue] = useState<number>(0);
 
-  // Debug logging
+  // Log status to console
   useEffect(() => {
-    console.log(
-      `StatusPanel update - status: "${status}", progress: ${progress}`
-    );
-
     if (status) {
-      setDebugInfo((prev) => [
-        ...prev.slice(-4),
-        `${new Date().toLocaleTimeString()}: ${getCleanStatus(
-          status
-        )} (${progress}%)`,
-      ]);
+      console.log(
+        `Status Update: "${getCleanStatus(status)}" (${progress}%) ${
+          time ? `- ${time}s` : ""
+        }`
+      );
     }
-  }, [status, progress]);
+  }, [status, progress, time]);
 
-  // Extract and handle time from status message
+  // Handle time updates from the backend 'time' property
   useEffect(() => {
-    if (status) {
-      const extractedTime = extractTimeFromStatus(status);
+    if (time) {
+      // Time property is available from backend - format as seconds
+      const timeValue = `${time}s`;
+      console.log(`Time value from backend: ${timeValue}`);
 
-      if (extractedTime) {
-        setCurrentStepTime(extractedTime);
+      // Map progress values to task IDs for completed tasks
+      const progressToTaskMap: Record<number, number> = {
+        30: 2, // Color themes complete - 30% progress
+        45: 3, // Font selection complete - 45% progress
+        70: 4, // Logo prompt complete - 70% progress
+        90: 5, // Image prompts complete - 90% progress
+        100: 6, // Finalizing complete - 100% progress
+      };
 
-        // If no timeElapsed was provided, set it for task display
-        if (!timeElapsed) {
-          // Map the current progress to the appropriate task
-          const progressToTaskMap: Record<number, number> = {
-            30: 2, // Color themes complete - 30% progress
-            50: 3, // Font selection complete - 50% progress
-            70: 4, // Logo prompt complete - 70% progress
-            90: 5, // Image prompts complete - 90% progress
-            100: 6, // Finalizing complete - 100% progress
-          };
+      // Store time for the completed task based on progress
+      const taskId = progressToTaskMap[progress];
+      if (taskId) {
+        console.log(
+          `Setting time for task ${taskId} (progress ${progress}): ${timeValue}`
+        );
+        setTaskTimes((prev) => ({
+          ...prev,
+          [taskId]: timeValue,
+        }));
 
-          // Get the taskId corresponding to the current progress value
-          const taskId = progressToTaskMap[progress];
-
-          if (taskId && extractedTime) {
-            console.log(`Setting time for task ${taskId}: ${extractedTime}`);
-            setTaskTimes((prev) => {
-              // Update the time for the completed task
-              return { ...prev, [taskId]: extractedTime };
-            });
-          }
-        }
-
-        // Check if this is the total time
-        if (progress === 100) {
-          setTotalTime(extractedTime);
+        // If this is a completion event (has time), update current step time
+        if (progress < 100) {
+          // For tasks in progress, show their time
+          setCurrentStepTime(timeValue);
+        } else {
+          // For the final task, set total time and clear current step time
+          setCurrentStepTime(null);
+          setTotalTime(timeValue);
         }
       }
     }
-  }, [status, progress, timeElapsed]);
+  }, [time, progress]);
 
-  // Log when taskTimes changes
+  // Extract time from status message as fallback if 'time' property isn't provided
   useEffect(() => {
-    console.log("Task times updated:", taskTimes);
-  }, [taskTimes]);
+    if (status && !time) {
+      const extractedTime = extractTimeFromStatus(status);
+      if (extractedTime) {
+        console.log(
+          `Extracted time from status: ${extractedTime} (fallback method)`
+        );
 
-  // Define tasks based on progress
-  const tasks = useMemo(
-    () => [
+        // Direct mapping of specific status messages to task IDs
+        const statusToTaskMap: Record<string, number> = {
+          "Color themes generated": 2,
+          "Fonts selected": 3,
+          "Logo prompt created": 4,
+          "Image prompts created": 5,
+          "Brand identity complete": 6,
+        };
+
+        // Match status message to task ID
+        const cleanStatus = getCleanStatus(status);
+        for (const [statusText, taskId] of Object.entries(statusToTaskMap)) {
+          if (cleanStatus.includes(statusText)) {
+            console.log(
+              `Status "${cleanStatus}" matches "${statusText}" - assigning to task ${taskId}`
+            );
+            setTaskTimes((prev) => ({
+              ...prev,
+              [taskId]: extractedTime,
+            }));
+
+            // Update current step time based on progress
+            if (progress < 100) {
+              setCurrentStepTime(extractedTime);
+            } else {
+              setCurrentStepTime(null);
+              setTotalTime(extractedTime);
+            }
+          }
+        }
+      }
+    }
+  }, [status, time, progress]);
+
+  // Define tasks based on progress and task times
+  const tasks = useMemo(() => {
+    const tasksList = [
       {
         id: 1,
         name: "Analyzing brand requirements",
         completed: progress >= 20,
-        time: taskTimes[1],
+        time: taskTimes[1] || (progress >= 20 ? "0.1s" : undefined), // Always show 0.1s for first task when completed
       },
       {
         id: 2,
@@ -122,7 +158,7 @@ const StatusPanel = ({
       {
         id: 3,
         name: "Selecting font combinations",
-        completed: progress >= 50,
+        completed: progress >= 45, // Updated to match backend progress value
         time: taskTimes[3],
       },
       {
@@ -143,12 +179,32 @@ const StatusPanel = ({
         completed: progress >= 100,
         time: taskTimes[6],
       },
-    ],
-    [progress, taskTimes]
-  );
+    ];
+
+    console.log(
+      "Tasks with times:",
+      tasksList.map((t) => ({
+        id: t.id,
+        name: t.name,
+        completed: t.completed,
+        time: t.time,
+      }))
+    );
+
+    return tasksList;
+  }, [progress, taskTimes]);
 
   // Display status without timing information for cleaner UI
   const displayStatus = getCleanStatus(status);
+
+  // Use actual brand name, defaulting to "Your Brand" if not available
+  const displayBrandName = brandName || "Your Brand";
+
+  // Create appropriate header text based on completion status
+  const headerText =
+    progress === 100
+      ? `${displayBrandName} identity complete`
+      : `Creating ${displayBrandName} identity`;
 
   return (
     <div className="w-full max-w-[360px] lg:max-w-full mx-auto bg-gray-800 rounded-lg shadow-lg p-4 lg:p-5 text-white">
@@ -162,7 +218,7 @@ const StatusPanel = ({
         ORPHIC
       </h1>
       <h2 className="text-xl lg:text-2xl font-bold mb-5 text-center">
-        Creating {brandName} identity
+        {headerText}
       </h2>
 
       <div className="mb-4">
@@ -177,7 +233,7 @@ const StatusPanel = ({
           <p className="text-md">
             {displayStatus || "Connecting to server..."}
           </p>
-          {currentStepTime && (
+          {currentStepTime && progress < 100 && (
             <p className="text-sm text-yellow-300 mt-1">
               <span className="text-gray-400">Time for this step:</span>{" "}
               {currentStepTime}

@@ -173,39 +173,76 @@ async function processBrandIdentity(req, res) {
             mood
         );
         const colorTime = measureStep();
-        await updateStatus(clientId, `Color themes generated - ${colorTime}s`, 30);
+        await updateStatus(clientId, `Color themes generated - ${colorTime}s`, 30, true, colorTime);
         storePartialResult(clientId, 'colorTheme', colorTheme);
 
         // Step 2: Generate font selection
         await updateStatus(clientId, 'Selecting fonts...', 40);
         const fonts = await fontSelectionService.selectFonts(brandTraits || companyDescription, companyName);
         const fontTime = measureStep();
-        await updateStatus(clientId, `Fonts selected - ${fontTime}s`, 50);
+        await updateStatus(clientId, `Fonts selected - ${fontTime}s`, 45, true, fontTime);
         storePartialResult(clientId, 'fonts', fonts);
 
         // Step 3: Generate logo prompt
-        await updateStatus(clientId, 'Creating logo prompt...', 60);
+        await updateStatus(clientId, 'Creating logo prompt...', 50);
         let logoPrompt;
         try {
-            logoPrompt = await logoPromptService.generateLogoPrompt(companyName, companyDescription, colorTheme);
+            const rawLogoPrompt = await logoPromptService.generateLogoPrompt(companyName, companyDescription, colorTheme);
+
+            // Extract primary color for structure consistency with frontend
+            const primaryColor = colorTheme && colorTheme.colors && colorTheme.colors.length > 0 ?
+                colorTheme.colors[0].hex : "#1A5F7A";
+
+            // Create a consistent structure to maintain compatibility with frontend
+            logoPrompt = {
+                prompt: rawLogoPrompt, // Plain text with markdown formatting
+                primaryColor: primaryColor,
+                secondaryColor: colorTheme && colorTheme.colors && colorTheme.colors.length > 1 ?
+                    colorTheme.colors[1].hex : primaryColor,
+                accentColor: colorTheme && colorTheme.colors && colorTheme.colors.length > 2 ?
+                    colorTheme.colors[2].hex : primaryColor,
+            };
         } catch (logoError) {
             console.error('Error generating logo prompt:', logoError);
-            // Create a fallback logo prompt with proper structure
+
+            // Create a fallback logo prompt as plain text with markdown formatting
+            const primaryColor = colorTheme && colorTheme.colors && colorTheme.colors.length > 0 ?
+                colorTheme.colors[0].hex : "#1A5F7A";
+
+            // Structured logo prompt with consistent format
             logoPrompt = {
-                prompt: `Create a minimalist, typography-focused logo for "${companyName}" using a clean, modern sans-serif font.`,
-                primaryColor: colorTheme && colorTheme.colors && colorTheme.colors.length > 0 ?
-                    colorTheme.colors[0].hex : "#1A5F7A"
+                prompt: `# Logo Design for "${companyName}"
+
+## Typography
+Create a minimalist, typography-focused logo using a clean, modern sans-serif font with subtle weight variations.
+
+## Layout
+Position the text centrally with balanced spacing between characters.
+
+## Color Usage
+Utilize the brand's primary color ${primaryColor} for the main text.
+
+## Graphical Elements
+Add a subtle geometric element—perhaps a small line or dot—that complements the typography without overwhelming it.
+
+## Mood & Feel
+The overall composition should convey professionalism with a contemporary edge while maintaining excellent scalability and recognition.`,
+                primaryColor: primaryColor,
+                secondaryColor: colorTheme && colorTheme.colors && colorTheme.colors.length > 1 ?
+                    colorTheme.colors[1].hex : primaryColor,
+                accentColor: colorTheme && colorTheme.colors && colorTheme.colors.length > 2 ?
+                    colorTheme.colors[2].hex : primaryColor,
             };
         }
         const logoTime = measureStep();
-        await updateStatus(clientId, `Logo prompt created - ${logoTime}s`, 70);
+        await updateStatus(clientId, `Logo prompt created - ${logoTime}s`, 70, true, logoTime);
         storePartialResult(clientId, 'logoPrompt', logoPrompt);
 
         // Step 4: Generate image prompt
         await updateStatus(clientId, 'Creating image prompts...', 80);
         const imagePrompts = await imagePromptService.generateImagePrompts(companyDescription, colorTheme);
         const imageTime = measureStep();
-        await updateStatus(clientId, `Image prompts created - ${imageTime}s`, 90);
+        await updateStatus(clientId, `Image prompts created - ${imageTime}s`, 90, true, imageTime);
 
         // Extra logging and validation before storing image prompts
         console.log('=== IMAGE PROMPTS VALIDATION ===');
@@ -285,7 +322,7 @@ async function processBrandIdentity(req, res) {
         const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
         // Send completion status
-        await updateStatus(clientId, `Brand identity complete - Total: ${totalTime}s`, 100, true);
+        await updateStatus(clientId, `Brand identity complete - Total: ${totalTime}s`, 100, true, totalTime);
 
         return result;
     } catch (error) {
@@ -296,12 +333,13 @@ async function processBrandIdentity(req, res) {
 }
 
 // Helper function to update status
-async function updateStatus(jobId, status, progress, completed = false) {
+async function updateStatus(jobId, status, progress, completed = false, time = 0) {
     const updatedStatus = {
         jobId,
         status,
         progress,
-        completed
+        completed,
+        time
     };
 
     // Always store the latest status
@@ -316,7 +354,7 @@ async function updateStatus(jobId, status, progress, completed = false) {
         console.log(`Client ${jobId} not connected yet, status will be sent when they connect`);
     }
 
-    console.log(`Job ${jobId} status: ${status}, progress: ${progress}%`);
+    console.log(`Job ${jobId} status: ${status}, progress: ${progress}%, time: ${time}s`);
 }
 
 // Controller methods

@@ -8,6 +8,43 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+// Add a helper function to ensure markdown content is always a string
+const ensureString = (content: any): string => {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (content === null || content === undefined) {
+    return "";
+  }
+  try {
+    // Try to stringify if it's an object
+    return JSON.stringify(content);
+  } catch (e) {
+    console.error("Error converting markdown content to string:", e);
+    return String(content);
+  }
+};
+
+// Helper function to convert font name to a format suitable for Google Fonts API
+const formatFontNameForUrl = (fontName: string): string => {
+  // Replace spaces with plus signs and remove special characters
+  return fontName.replace(/\s+/g, "+").replace(/[^a-zA-Z0-9+]/g, "");
+};
+
+// Helper function to load Google Fonts
+const loadGoogleFont = (fontName: string) => {
+  if (!fontName || fontName === "Unknown Font" || fontName === "Not specified")
+    return;
+
+  const formattedName = formatFontNameForUrl(fontName);
+  const link = document.createElement("link");
+  link.href = `https://fonts.googleapis.com/css2?family=${formattedName}:wght@400;700&display=swap`;
+  link.rel = "stylesheet";
+  document.head.appendChild(link);
+
+  console.log(`Loaded Google Font: ${fontName}`);
+};
+
 interface Color {
   name: string;
   hex: string;
@@ -57,6 +94,8 @@ interface BrandResults {
   logoPrompt?: {
     prompt: string | StructuredLogoPrompt;
     primaryColor: string;
+    secondaryColor?: string;
+    accentColor?: string;
   };
   imagePrompts?: ImagePrompt[];
 }
@@ -79,6 +118,62 @@ interface ResultsDisplayProps {
   };
 }
 
+// Add a common web-safe font fallbacks object
+const webSafeFontFallbacks: Record<string, string> = {
+  Arial: "Arial, Helvetica, sans-serif",
+  Helvetica: "Helvetica, Arial, sans-serif",
+  "Times New Roman": "'Times New Roman', Times, serif",
+  Times: "'Times New Roman', Times, serif",
+  "Courier New": "'Courier New', Courier, monospace",
+  Courier: "'Courier New', Courier, monospace",
+  Verdana: "Verdana, Geneva, sans-serif",
+  Georgia: "Georgia, serif",
+  Palatino: "'Palatino Linotype', 'Book Antiqua', Palatino, serif",
+  Garamond: "Garamond, serif",
+  Bookman: "'Bookman Old Style', serif",
+  Tahoma: "Tahoma, Geneva, sans-serif",
+  "Trebuchet MS": "'Trebuchet MS', Helvetica, sans-serif",
+  Geneva: "Geneva, Verdana, sans-serif",
+  "Arial Black": "'Arial Black', Gadget, sans-serif",
+  Impact: "Impact, Charcoal, sans-serif",
+  "Century Gothic": "'Century Gothic', sans-serif",
+  // Add more common font fallbacks as needed
+};
+
+// Utility function to generate proper font-family CSS value with fallbacks
+const getFontFamilyValue = (fontName: string, fontStyle: string): string => {
+  // Check if we have specific fallbacks for this font
+  return (
+    webSafeFontFallbacks[fontName] ||
+    // If not, provide generic fallbacks based on font style
+    (fontStyle.toLowerCase().includes("serif")
+      ? `"${fontName}", Times, serif`
+      : fontStyle.toLowerCase().includes("mono")
+      ? `"${fontName}", "Courier New", monospace`
+      : `"${fontName}", Arial, sans-serif`)
+  );
+};
+
+// Component to display a font preview
+interface FontPreviewProps {
+  fontName: string;
+  fontStyle: string;
+}
+
+const FontPreview = ({ fontName, fontStyle }: FontPreviewProps) => {
+  return (
+    <div className="font-preview">
+      <span
+        className="inline-block px-2 py-1 bg-gray-100 rounded mr-2"
+        style={{ fontFamily: getFontFamilyValue(fontName, fontStyle) }}
+      >
+        {fontName}
+      </span>
+      <span className="text-sm text-gray-600">{fontStyle}</span>
+    </div>
+  );
+};
+
 const ResultsDisplay = ({
   results,
   loading = false,
@@ -92,6 +187,7 @@ const ResultsDisplay = ({
 }: ResultsDisplayProps) => {
   const [activeTab, setActiveTab] = useState("parameters");
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [loadedFonts, setLoadedFonts] = useState<Set<string>>(new Set());
 
   // Debug fonts data when the tab is active
   useEffect(() => {
@@ -107,6 +203,19 @@ const ResultsDisplay = ({
       }
     }
   }, [activeTab, results.fonts]);
+
+  // Load Google Fonts when fonts data is available
+  useEffect(() => {
+    if (Array.isArray(results.fonts) && results.fonts.length > 0) {
+      results.fonts.forEach((font) => {
+        const fontName = font.name || font.font_name || "";
+        if (fontName && !loadedFonts.has(fontName)) {
+          loadGoogleFont(fontName);
+          setLoadedFonts((prev) => new Set(prev).add(fontName));
+        }
+      });
+    }
+  }, [results.fonts, loadedFonts]);
 
   // Helper function to copy text to clipboard
   const copyToClipboard = (text: string, identifier: string) => {
@@ -136,6 +245,7 @@ const ResultsDisplay = ({
     if (!results.logoPrompt) return "";
 
     if (typeof results.logoPrompt.prompt === "string") {
+      // Plain text with markdown formatting - return as is
       return results.logoPrompt.prompt;
     } else {
       // For structured prompts, create a well-formatted markdown text
@@ -298,19 +408,22 @@ const ResultsDisplay = ({
   };
 
   // Convert a string prompt to markdown format if it's not already
-  const formatStringPrompt = (prompt: string) => {
+  const formatStringPrompt = (prompt: any) => {
+    // First ensure we have a string
+    const promptStr = ensureString(prompt);
+
     // Check if the prompt already contains markdown formatting
     if (
-      prompt.includes("#") ||
-      prompt.includes("**") ||
-      prompt.includes("- ")
+      promptStr.includes("#") ||
+      promptStr.includes("**") ||
+      promptStr.includes("- ")
     ) {
-      return prompt;
+      return promptStr;
     }
 
     // Add basic markdown formatting
     // Split by double newlines to separate paragraphs
-    const paragraphs = prompt.split(/\n\n+/);
+    const paragraphs = promptStr.split(/\n\n+/);
 
     // Convert the first paragraph to a heading if it's short
     if (paragraphs[0] && paragraphs[0].length < 100) {
@@ -519,7 +632,7 @@ const ResultsDisplay = ({
             textShadow: "0px 1px 2px rgba(0,0,0,0.3)",
           }}
         >
-          {results.brandName || "Your Brand"}{" "}
+          {formData?.brandName || results.brandName || "Your Brand"}{" "}
         </h2>
         <p
           className="text-gray-100"
@@ -528,7 +641,9 @@ const ResultsDisplay = ({
             lineHeight: "1.5",
           }}
         >
-          {results.brandDescription || "Generating your brand identity"}
+          {formData?.brandDescription ||
+            results.brandDescription ||
+            "Generating your brand identity"}
         </p>
       </div>
 
@@ -704,10 +819,8 @@ const ResultsDisplay = ({
                             )}
                           </button>
                         </div>
-                        <p className="text-sm text-gray-600 mb-1">
-                          <p className="text-sm text-gray-600 mr-2">
-                            ({color.rgb})
-                          </p>
+                        <div className="flex items-center text-sm text-gray-600 mb-1">
+                          <span className="mr-2">({color.rgb})</span>
                           <button
                             onClick={() =>
                               copyToClipboard(color.rgb, `color-rgb-${index}`)
@@ -721,7 +834,7 @@ const ResultsDisplay = ({
                               <span>Copy</span>
                             )}
                           </button>
-                        </p>
+                        </div>
                         <p className="text-xs text-gray-500 mt-2">
                           {color.usage}
                         </p>
@@ -787,16 +900,21 @@ const ResultsDisplay = ({
                         <div key={index} className="border rounded-lg p-4">
                           <h4
                             className="text-lg font-bold mb-1"
-                            style={{ fontFamily: `${fontName}, ${fontStyle}` }}
+                            style={{
+                              fontFamily: getFontFamilyValue(
+                                fontName,
+                                fontStyle
+                              ),
+                            }}
                           >
                             {fontName}
                           </h4>
-                          <p className="text-sm text-gray-600 mb-2">
-                            <span className="inline-block px-2 py-1 bg-gray-100 rounded mr-2">
-                              {fontName}
-                            </span>
-                            {fontStyle}
-                          </p>
+                          <div className="mb-2">
+                            <FontPreview
+                              fontName={fontName}
+                              fontStyle={fontStyle}
+                            />
+                          </div>
                           <p className="text-sm font-medium mb-1">
                             Usage: {fontUsage}
                           </p>
@@ -889,14 +1007,14 @@ const ResultsDisplay = ({
 
                   <div className="p-4 bg-white">
                     {typeof results.logoPrompt.prompt === "string" ? (
-                      // Original format: string-based prompt with markdown
-                      <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-headings:text-gray-800 prose-headings:border-b prose-headings:pb-1 prose-headings:mb-3 prose-p:my-2 prose-strong:text-gray-900 prose-strong:font-semibold prose-li:my-1">
+                      // String-based prompt with markdown formatting
+                      <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-headings:text-gray-800 prose-headings:pb-1 prose-headings:mb-3 prose-p:my-2 prose-strong:text-gray-900 prose-strong:font-semibold prose-li:my-1">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {formatStringPrompt(results.logoPrompt.prompt)}
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      // New format: structured prompt with sections using markdown
+                      // Legacy format: structured prompt with sections using markdown
                       <div className="space-y-4">
                         {/* Render overall goal if available */}
                         {(results.logoPrompt.prompt as StructuredLogoPrompt)
@@ -907,12 +1025,12 @@ const ResultsDisplay = ({
                             </h4>
                             <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-headings:text-gray-800 prose-p:my-2 prose-strong:text-gray-900 prose-strong:font-semibold prose-li:my-1">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {
+                                {ensureString(
                                   (
                                     results.logoPrompt
                                       .prompt as StructuredLogoPrompt
                                   ).overallGoal
-                                }
+                                )}
                               </ReactMarkdown>
                             </div>
                           </div>
@@ -931,7 +1049,7 @@ const ResultsDisplay = ({
                               </h4>
                               <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-headings:text-gray-800 prose-p:my-2 prose-strong:text-gray-900 prose-strong:font-semibold prose-li:my-1">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {section.details}
+                                  {ensureString(section.details)}
                                 </ReactMarkdown>
                               </div>
                             </div>

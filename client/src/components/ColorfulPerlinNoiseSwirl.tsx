@@ -199,10 +199,35 @@ const ColorfulPerlinNoiseSwirl: React.FC = () => {
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const materialRef = useRef<THREE.ShaderMaterial | null>(null);
   const frameIdRef = useRef<number | null>(null);
+  const timeRef = useRef<number>(0); // Added to keep track of time independently
+  const hasInitialized = useRef<boolean>(false);
+
+  // Helper function to remove any existing canvas elements
+  const cleanupExistingCanvas = (container: HTMLElement) => {
+    // Find and remove any existing canvas elements
+    const existingCanvases = container.querySelectorAll("canvas");
+    if (existingCanvases.length > 0) {
+      console.log(
+        `Found ${existingCanvases.length} existing canvas(es), removing them before initialization`
+      );
+      existingCanvases.forEach((canvas) => {
+        container.removeChild(canvas);
+      });
+    }
+  };
 
   // Set up the Three.js scene
   useEffect(() => {
-    if (!canvasRef.current) return;
+    // Check if we've already initialized this component or if the ref isn't ready
+    if (!canvasRef.current || hasInitialized.current) return;
+
+    // Mark as initialized to prevent duplicate setup
+    hasInitialized.current = true;
+
+    console.log("Initializing ColorfulPerlinNoiseSwirl animation");
+
+    // Clean up any existing canvas elements (failsafe)
+    cleanupExistingCanvas(canvasRef.current);
 
     // Initialize scene, camera, and renderer
     const scene = new THREE.Scene();
@@ -240,29 +265,35 @@ const ColorfulPerlinNoiseSwirl: React.FC = () => {
     };
     window.addEventListener("resize", handleResize);
 
-    // Animation loop - using simpler time increment approach
-    const animate = () => {
+    // Animation loop - using timestamp-based animation
+    const animate = (timestamp: number) => {
       if (
         !materialRef.current ||
         !rendererRef.current ||
         !sceneRef.current ||
         !cameraRef.current
-      )
+      ) {
+        frameIdRef.current = requestAnimationFrame(animate);
         return;
+      }
 
-      // Simple time increment for animation
-      materialRef.current.uniforms.time.value += 0.01;
+      // Increment time based on timestamp to ensure smooth animation
+      timeRef.current += 0.01; // Use a constant increment for consistent animation
+      materialRef.current.uniforms.time.value = timeRef.current;
 
       rendererRef.current.render(sceneRef.current, cameraRef.current);
       frameIdRef.current = requestAnimationFrame(animate);
     };
 
-    animate();
+    // Start the animation
+    frameIdRef.current = requestAnimationFrame(animate);
+    console.log("Animation started");
 
     // Cleanup on unmount
     return () => {
       if (frameIdRef.current) {
         cancelAnimationFrame(frameIdRef.current);
+        console.log("Animation stopped");
       }
       window.removeEventListener("resize", handleResize);
 
@@ -279,6 +310,9 @@ const ColorfulPerlinNoiseSwirl: React.FC = () => {
       if (canvasRef.current && rendererRef.current?.domElement) {
         canvasRef.current.removeChild(rendererRef.current.domElement);
       }
+
+      // Reset initialization flag when component unmounts
+      hasInitialized.current = false;
     };
   }, []);
 
