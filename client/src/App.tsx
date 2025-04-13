@@ -3,6 +3,7 @@ import BrandForm from "./components/BrandForm";
 import StatusPanel from "./components/StatusPanel";
 import ResultsDisplay from "./components/ResultsDisplay";
 import { extractTimeFromStatus } from "./utils/timeUtils";
+import ColorfulPerlinNoiseSwirl from "./components/ColorfulPerlinNoiseSwirl";
 import "./index.css";
 
 // Define the partial results type
@@ -828,22 +829,35 @@ function App() {
   }, [timeStarted]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-6xl">
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-0 py-0 relative">
+      {/* Background Animation */}
+      <div className="absolute inset-0 z-0 opacity-70">
+        <ColorfulPerlinNoiseSwirl />
+      </div>
+
+      <div className="w-full max-w-6xl relative z-10">
         {currentView === "form" && (
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">Orphic</h1>
-            <p className="text-gray-600 text-lg mb-8">
+          <div className="text-center mb-6">
+            <h1
+              className="text-8xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-white via-blue-300 to-purple-500 mb-0 leading-none"
+              style={{
+                textShadow:
+                  "0 0 15px rgba(139, 92, 246, 0.5), 0 0 30px rgba(96, 165, 250, 0.3)",
+              }}
+            >
+              ORPHIC
+            </h1>
+            <p className="text-gray-400 text-sm mt-2 mb-6 font-light tracking-wide uppercase">
               AI-Powered Brand Identity Generator
             </p>
             <BrandForm onSubmit={handleSubmit} isLoading={false} />
-            <div className="mt-4 flex justify-center items-center">
-              <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer">
+            <div className="mt-2 flex justify-center items-center">
+              <label className="flex items-center space-x-2 text-xs text-gray-400 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={autoReconnect}
                   onChange={(e) => setAutoReconnect(e.target.checked)}
-                  className="form-checkbox h-4 w-4 text-blue-600"
+                  className="form-checkbox h-3 w-3 text-purple-600"
                 />
                 <span>Remember in-progress jobs</span>
               </label>
@@ -878,7 +892,7 @@ function App() {
             <div className="mt-4 lg:hidden text-center">
               <button
                 onClick={() => setCurrentView("preview")}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
               >
                 View Live Preview
               </button>
@@ -898,7 +912,7 @@ function App() {
             <div className="mt-4 text-center">
               <button
                 onClick={() => setCurrentView("processing")}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors"
               >
                 Back to Status
               </button>

@@ -9,25 +9,71 @@ const getOllama = async () => {
   return ollamaPromise;
 };
 
+const fontSchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    style: { type: "string" },
+    usage: { type: "string" },
+    rationale: { type: "string" }
+  },
+  required: ["name", "style", "usage", "rationale"]
+};
+// Example to demonstrate the expected format
+const example = {
+  fonts: [
+    {
+      name: "Montserrat",
+      style: "Sans-serif",
+      usage: "Headings and titles",
+      rationale: "Modern, professional appearance with good readability that conveys confidence and contemporary design values"
+    },
+    {
+      name: "Merriweather",
+      style: "Serif",
+      usage: "Body text and paragraphs",
+      rationale: "Combines classic elegance with excellent readability, creating a trustworthy and established feeling"
+    },
+    {
+      name: "Caveat",
+      style: "Script",
+      usage: "Accents, quotes, and special elements",
+      rationale: "Adds a personal, creative touch to balance the more structured primary fonts"
+    }
+  ]
+};
+
 // Font selection service
-exports.selectFonts = async (brandDescription) => {
+exports.selectFonts = async (brandDescription, brandName) => {
   try {
     console.log('Selecting fonts based on:', brandDescription);
 
     // Generate a prompt for the Ollama model to select fonts
     const prompt = `
-      Select three fonts that would best represent a brand with the following description:
+      Select three fonts that would best represent the brand "${brandName}" with the following description:
       "${brandDescription}"
       
       For each font, provide:
       1. The font name (choose from popular, accessible fonts)
       2. The font style (e.g., serif, sans-serif, display, script)
       3. Usage recommendation (e.g., headings, body text, accents)
-      4. Why this font matches the brand's personality and values
-      
-      Format the response as a JSON object with an array of font objects.
+      4. Rationale : Why this font matches the brand's personality and values
     `;
+    // Format the final prompt for the AI model
+    const formattedPrompt = `
+You must respond with valid JSON that follows this schema:
+${JSON.stringify(fontSchema, null, 2)}
 
+Your response must ONLY contain valid JSON without any additional text, comments, or explanations outside the JSON structure.
+
+Here's an example of the expected format:
+${JSON.stringify(example, null, 2)}
+
+Based on this information, generate a cohesive color scheme as specified:
+${prompt}
+
+JSON response:
+`;
     try {
       // Get the ollama module
       const ollama = await getOllama();
@@ -40,10 +86,11 @@ exports.selectFonts = async (brandDescription) => {
         messages: [
           {
             role: 'user',
-            content: prompt
+            content: formattedPrompt
           }
         ],
-        format: 'json'
+        format: 'json',
+        temperature: 0.5
       });
 
       console.log('Received font selection response from Ollama');

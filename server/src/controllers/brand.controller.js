@@ -178,7 +178,7 @@ async function processBrandIdentity(req, res) {
 
         // Step 2: Generate font selection
         await updateStatus(clientId, 'Selecting fonts...', 40);
-        const fonts = await fontSelectionService.selectFonts(brandTraits || companyDescription);
+        const fonts = await fontSelectionService.selectFonts(brandTraits || companyDescription, companyName);
         const fontTime = measureStep();
         await updateStatus(clientId, `Fonts selected - ${fontTime}s`, 50);
         storePartialResult(clientId, 'fonts', fonts);

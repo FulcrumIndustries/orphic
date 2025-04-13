@@ -1,4 +1,4 @@
-import BlobAnimation from "./BlobAnimation";
+import CircularProgressBar from "./CircularProgressBar";
 import TaskList from "./TaskList";
 import { useMemo, useEffect, useState } from "react";
 import { extractTimeFromStatus, getCleanStatus } from "../utils/timeUtils";
@@ -152,12 +152,23 @@ const StatusPanel = ({
 
   return (
     <div className="w-full max-w-[360px] lg:max-w-full mx-auto bg-gray-800 rounded-lg shadow-lg p-4 lg:p-5 text-white">
-      <h2 className="text-xl lg:text-2xl font-bold mb-3 text-center">
+      <h1
+        className="text-3xl lg:text-5xl text-center font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-white via-blue-300 to-purple-500 mb-2 leading-none"
+        style={{
+          textShadow:
+            "0 0 15px rgba(139, 92, 246, 0.5), 0 0 30px rgba(96, 165, 250, 0.3)",
+        }}
+      >
+        ORPHIC
+      </h1>
+      <h2 className="text-xl lg:text-2xl font-bold mb-5 text-center">
         Creating {brandName} identity
       </h2>
 
       <div className="mb-4">
-        <BlobAnimation progress={progress} baseColor={baseColor} />
+        <div className="flex justify-center items-center">
+          <CircularProgressBar progress={progress} baseColor={baseColor} />
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -173,20 +184,12 @@ const StatusPanel = ({
             </p>
           )}
           <p className="text-xs text-gray-500 mt-1">
-            Progress: {progress}%
             {totalTime && (
-              <span className="ml-2">
+              <span>
                 Total time: <span className="text-green-300">{totalTime}</span>
               </span>
             )}
           </p>
-        </div>
-
-        <div className="w-full bg-gray-700 rounded-full h-3 mt-3">
-          <div
-            className="bg-gradient-to-r from-orange-500 to-red-600 h-3 rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          ></div>
         </div>
 
         <div className="mt-4 bg-gray-700 p-3 rounded-lg">
