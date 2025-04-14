@@ -2,7 +2,7 @@
 
 Orphic is a creative design assistant that takes a brand name and a brief description as input, then automatically generates a comprehensive visual identity package. This package includes a color theme grounded in color harmony theory, a set of three matching typography fonts, a prompt for custom typography-based logo, and three brand-relevant prompts for images.
 
-## Screenshot
+## Screenshots
 
 ![Orphic](orphic0.PNG)
 ![Orphic](orphic1.PNG)
