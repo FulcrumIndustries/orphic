@@ -43,6 +43,16 @@ const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
       });
     }
 
+    // Special debug for image prompts task (id=5)
+    const imagePromptsTask = tasks.find((t) => t.id === 5);
+    if (imagePromptsTask) {
+      console.log(
+        `IMAGE PROMPTS TASK (id=5): completed=${
+          imagePromptsTask.completed
+        }, time=${imagePromptsTask.time || "undefined"}`
+      );
+    }
+
     // Log tasks without time data (for debugging)
     const tasksWithoutTime = tasks.filter((t) => t.completed && !t.time);
     if (tasksWithoutTime.length > 0) {
@@ -63,6 +73,14 @@ const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
     if (task.id === 2 && task.completed && !task.time) {
       console.log("Color themes task completed but missing time");
     }
+    // Extra debugging for image prompts task (id=5)
+    if (task.id === 5) {
+      console.log(
+        `Processing task 5 in enhancedTasks map: completed=${
+          task.completed
+        }, time=${task.time || "undefined"}`
+      );
+    }
     return task;
   });
 
@@ -75,6 +93,18 @@ const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
           console.log(
             `Task ${task.id} (${task.name}) is completed but has no time`
           );
+        }
+
+        // Improved time parsing for coloring
+        let timeValue = 0;
+        if (task.time) {
+          // Remove any non-numeric characters (like 's') before parsing
+          timeValue = parseFloat(task.time.replace(/[^\d.]/g, ""));
+          if (task.id === 5) {
+            console.log(
+              `Task 5 parsed time value: ${timeValue} from original: ${task.time}`
+            );
+          }
         }
 
         return (
@@ -151,15 +181,19 @@ const TaskList: React.FC<TaskListProps> = ({ tasks }) => {
                   className={`text-xs font-mono ${
                     task.time.includes("~")
                       ? "text-gray-400"
-                      : parseFloat(task.time) > 100
+                      : timeValue > 100
                       ? "text-orange-300"
-                      : parseFloat(task.time) > 30
+                      : timeValue > 30
                       ? "text-yellow-300"
                       : "text-green-300"
                   }`}
                 >
                   {task.time}
                 </span>
+              )}
+              {/* Show warning if task is completed but missing time */}
+              {task.completed && !task.time && (
+                <span className="text-xs font-mono text-red-400">no time</span>
               )}
               {/* Show placeholder for future tasks */}
               {!task.completed && !isInProgress && (

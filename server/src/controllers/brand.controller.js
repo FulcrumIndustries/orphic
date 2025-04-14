@@ -14,10 +14,148 @@ const sseClients = new Map();
 // Object to store processing statuses and results (in-memory DB)
 const jobStatuses = {};
 
+// Task tracking for each job
+const jobTasks = {};
+// Store individual task times
+const taskTimes = {};
+
+// Initialize task tracking for a new job
+function initializeTaskArray(jobId) {
+    jobTasks[jobId] = [
+        {
+            id: 1,
+            name: "Analyzing brand requirements",
+            completed: false,
+            time: null
+        },
+        {
+            id: 2,
+            name: "Generating color themes",
+            completed: false,
+            time: null
+        },
+        {
+            id: 3,
+            name: "Selecting font combinations",
+            completed: false,
+            time: null
+        },
+        {
+            id: 4,
+            name: "Creating logo prompt",
+            completed: false,
+            time: null
+        },
+        {
+            id: 5,
+            name: "Building image prompts",
+            completed: false,
+            time: null
+        },
+        {
+            id: 6,
+            name: "Finalizing brand package",
+            completed: false,
+            time: null
+        }
+    ];
+
+    // Initialize task times
+    taskTimes[jobId] = {
+        1: "0.1", // Analysis always gets 0.1s
+        2: null,  // Color themes
+        3: null,  // Fonts
+        4: null,  // Logo prompt
+        5: null,  // Image prompts
+        6: null   // Total/Finalizing
+    };
+
+    console.log(`Initialized task array for job ${jobId}`);
+}
+
+// Update a specific task
+function updateTask(jobId, taskId, completed, time) {
+    if (!jobTasks[jobId]) {
+        console.log(`No task array found for job ${jobId}, initializing`);
+        initializeTaskArray(jobId);
+    }
+
+    // Store the task time if provided
+    if (time) {
+        if (!taskTimes[jobId]) {
+            taskTimes[jobId] = { 1: "0.1" }; // Initialize with analysis time
+        }
+        taskTimes[jobId][taskId] = time;
+        console.log(`Stored time for task ${taskId}: ${time}s`);
+    }
+
+    // Find the task by ID
+    const task = jobTasks[jobId].find(t => t.id === taskId);
+    if (task) {
+        task.completed = completed;
+        if (time) {
+            task.time = `${time}s`;
+        }
+        console.log(`Updated task ${taskId} for job ${jobId}: completed=${completed}, time=${time || 'null'}`);
+    } else {
+        console.error(`Task ${taskId} not found for job ${jobId}`);
+    }
+}
+
+// Update tasks based on progress
+function updateTasksByProgress(jobId, progress, currentTime) {
+    if (!jobTasks[jobId]) {
+        initializeTaskArray(jobId);
+    }
+
+    if (!taskTimes[jobId]) {
+        taskTimes[jobId] = { 1: "0.1" }; // Initialize with analysis time
+    }
+
+    // Log the current task times for debugging
+    console.log(`Current task times for job ${jobId}:`, taskTimes[jobId]);
+
+    // Mark tasks as completed based on progress, using their individual stored times
+    if (progress >= 20) {
+        // Analysis always gets 0.1s
+        updateTask(jobId, 1, true, 0.1);
+    }
+
+    if (progress >= 30) {
+        // Color themes - use stored time or current time
+        updateTask(jobId, 2, true, taskTimes[jobId][2] || currentTime);
+    }
+
+    if (progress >= 45) {
+        // Fonts - use stored time or current time
+        updateTask(jobId, 3, true, taskTimes[jobId][3] || currentTime);
+    }
+
+    if (progress >= 70) {
+        // Logo prompt - use stored time or current time
+        updateTask(jobId, 4, true, taskTimes[jobId][4] || currentTime);
+    }
+
+    if (progress >= 90) {
+        // Image prompts - use stored time or current time 
+        updateTask(jobId, 5, true, taskTimes[jobId][5] || currentTime);
+    }
+
+    if (progress >= 100) {
+        // Total time - always use current time for final task
+        updateTask(jobId, 6, true, currentTime);
+    }
+}
+
 // Add a new SSE client
 function addClient(clientId, res) {
     sseClients.set(clientId, res);
     console.log(`Client ${clientId} connected. Total clients: ${sseClients.size}`);
+
+    // Initialize task array if needed
+    if (!jobTasks[clientId]) {
+        initializeTaskArray(clientId);
+    }
 
     // Send the latest status if available when a client connects
     const currentStatus = brandStatus.get(clientId);
@@ -37,8 +175,14 @@ function removeClient(clientId) {
 function sendUpdate(clientId, data) {
     const client = sseClients.get(clientId);
     if (client) {
-        console.log(`Sending update to client ${clientId}:`, JSON.stringify(data));
-        client.write(`data: ${JSON.stringify(data)}\n\n`);
+        // Include tasks array in the update
+        const dataWithTasks = {
+            ...data,
+            tasks: jobTasks[clientId] || []
+        };
+
+        console.log(`Sending update to client ${clientId} with ${dataWithTasks.tasks.length} tasks`);
+        client.write(`data: ${JSON.stringify(dataWithTasks)}\n\n`);
     } else {
         console.log(`Client ${clientId} not connected yet, storing status for later delivery`);
         // We still update the status in memory even if client isn't connected yet
@@ -107,9 +251,6 @@ function storePartialResult(jobId, section, data) {
     // Store the partial result
     jobStatuses[jobId].results[section] = data;
     console.log(`Stored ${section} data for job ${jobId}`);
-
-    // Update the job status to indicate section completion
-    updateStatus(jobId, `${section} generation completed`, getProgressForSection(section));
 }
 
 // Get the progress percentage for a specific section
@@ -146,6 +287,9 @@ async function processBrandIdentity(req, res) {
 
     const clientId = req.headers['x-client-id'] || uuidv4();
 
+    // Initialize the task array for this job
+    initializeTaskArray(clientId);
+
     // Timing measurements
     const startTime = Date.now();
     let stepStartTime = startTime;
@@ -155,17 +299,27 @@ async function processBrandIdentity(req, res) {
         const now = Date.now();
         const duration = ((now - stepStartTime) / 1000).toFixed(1);
         stepStartTime = now;
+        console.log(`Completed step in ${duration}s`);
         return duration; // Return just the number, not formatted with "s"
     };
 
     // Send initial status update
     await updateStatus(clientId, 'Processing brand identity...', 10);
 
+    // Mark the analysis task as started
+    updateTask(clientId, 1, false, null);
+
     try {
         // Process tasks sequentially instead of in parallel
 
         // Step 1: Generate color themes
+        console.log('STEP 1: STARTING color theme generation');
         await updateStatus(clientId, 'Generating color themes...', 20);
+        // Mark analysis as completed with fixed time (0.1s)
+        updateTask(clientId, 1, true, 0.1);
+        // Mark color theme generation as started
+        updateTask(clientId, 2, false, null);
+
         const colorTheme = await colorThemeService.generateColorTheme(
             brandTraits || companyDescription,
             colorSchemeType,
@@ -173,18 +327,39 @@ async function processBrandIdentity(req, res) {
             mood
         );
         const colorTime = measureStep();
+        console.log(`STEP 1: COMPLETED color theme generation in ${colorTime}s`);
+        // Store the time for color themes (task 2)
+        if (!taskTimes[clientId]) {
+            taskTimes[clientId] = { 1: "0.1" };
+        }
+        taskTimes[clientId][2] = colorTime;
+        // Mark color theme generation as completed
+        updateTask(clientId, 2, true, colorTime);
         await updateStatus(clientId, `Color themes generated - ${colorTime}s`, 30, true, colorTime);
         storePartialResult(clientId, 'colorTheme', colorTheme);
 
         // Step 2: Generate font selection
+        console.log('STEP 2: STARTING font selection');
         await updateStatus(clientId, 'Selecting fonts...', 40);
+        // Mark font selection as started
+        updateTask(clientId, 3, false, null);
+
         const fonts = await fontSelectionService.selectFonts(brandTraits || companyDescription, companyName);
         const fontTime = measureStep();
+        console.log(`STEP 2: COMPLETED font selection in ${fontTime}s`);
+        // Store the time for fonts (task 3)
+        taskTimes[clientId][3] = fontTime;
+        // Mark font selection as completed
+        updateTask(clientId, 3, true, fontTime);
         await updateStatus(clientId, `Fonts selected - ${fontTime}s`, 45, true, fontTime);
         storePartialResult(clientId, 'fonts', fonts);
 
         // Step 3: Generate logo prompt
+        console.log('STEP 3: STARTING logo prompt creation');
         await updateStatus(clientId, 'Creating logo prompt...', 50);
+        // Mark logo prompt creation as started
+        updateTask(clientId, 4, false, null);
+
         let logoPrompt;
         try {
             const rawLogoPrompt = await logoPromptService.generateLogoPrompt(companyName, companyDescription, colorTheme);
@@ -235,13 +410,27 @@ The overall composition should convey professionalism with a contemporary edge w
             };
         }
         const logoTime = measureStep();
+        console.log(`STEP 3: COMPLETED logo prompt creation in ${logoTime}s`);
+        // Store the time for logo prompt (task 4)
+        taskTimes[clientId][4] = logoTime;
+        // Mark logo prompt as completed
+        updateTask(clientId, 4, true, logoTime);
         await updateStatus(clientId, `Logo prompt created - ${logoTime}s`, 70, true, logoTime);
         storePartialResult(clientId, 'logoPrompt', logoPrompt);
 
         // Step 4: Generate image prompt
+        console.log('STEP 4: STARTING image prompt creation');
         await updateStatus(clientId, 'Creating image prompts...', 80);
+        // Mark image prompts creation as started
+        updateTask(clientId, 5, false, null);
+
         const imagePrompts = await imagePromptService.generateImagePrompts(companyDescription, colorTheme);
         const imageTime = measureStep();
+        console.log(`STEP 4: COMPLETED image prompt creation in ${imageTime}s`);
+        // Store the time for image prompts (task 5)
+        taskTimes[clientId][5] = imageTime;
+        // Mark image prompts as completed
+        updateTask(clientId, 5, true, imageTime);
         await updateStatus(clientId, `Image prompts created - ${imageTime}s`, 90, true, imageTime);
 
         // Extra logging and validation before storing image prompts
@@ -321,6 +510,12 @@ The overall composition should convey professionalism with a contemporary edge w
         // Calculate total time
         const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
 
+        // Store the time for the final task (task 6)
+        taskTimes[clientId][6] = totalTime;
+
+        // Mark final task as completed
+        updateTask(clientId, 6, true, totalTime);
+
         // Send completion status
         await updateStatus(clientId, `Brand identity complete - Total: ${totalTime}s`, 100, true, totalTime);
 
@@ -332,29 +527,51 @@ The overall composition should convey professionalism with a contemporary edge w
     }
 }
 
-// Helper function to update status
-async function updateStatus(jobId, status, progress, completed = false, time = 0) {
-    const updatedStatus = {
-        jobId,
-        status,
-        progress,
-        completed,
-        time
-    };
-
-    // Always store the latest status
-    brandStatus.set(jobId, updatedStatus);
-
-    // Only send update if client is connected
-    const client = sseClients.get(jobId);
-    if (client) {
-        console.log(`Sending update to client ${jobId}:`, updatedStatus);
-        client.write(`data: ${JSON.stringify(updatedStatus)}\n\n`);
-    } else {
-        console.log(`Client ${jobId} not connected yet, status will be sent when they connect`);
+// Update status via SSE
+async function updateStatus(clientId, message, progress, isComplete = false, time = null) {
+    if (!sseClients.has(clientId)) {
+        console.log(`Client ${clientId} not found for status update`);
+        return;
     }
 
-    console.log(`Job ${jobId} status: ${status}, progress: ${progress}%, time: ${time}s`);
+    // Ensure tasks are initialized
+    if (!jobTasks[clientId]) {
+        initializeTaskArray(clientId);
+    }
+
+    // Update tasks based on progress if needed
+    if (progress !== null) {
+        updateTasksByProgress(clientId, progress, time);
+    }
+
+    // Prepare the response
+    const response = {
+        id: clientId,
+        message: message,
+        isComplete: isComplete,
+        tasks: jobTasks[clientId]
+    };
+
+    if (progress !== null) {
+        response.progress = progress;
+    }
+
+    if (time !== null) {
+        response.time = time;
+    }
+
+    // Send the update
+    const client = sseClients.get(clientId);
+    if (client) {
+        console.log(`Sending update to client ${clientId} with ${response.tasks.length} tasks`);
+        client.write(`data: ${JSON.stringify(response)}\n\n`);
+    } else {
+        console.log(`Client ${clientId} not connected yet, status will be sent when they connect`);
+        // We still update the status in memory even if client isn't connected yet
+        brandStatus.set(clientId, response);
+    }
+
+    console.log(`Status update sent to ${clientId}: ${message} (Progress: ${progress}%)`);
 }
 
 // Controller methods

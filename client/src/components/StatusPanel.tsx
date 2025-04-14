@@ -1,7 +1,6 @@
 import CircularProgressBar from "./CircularProgressBar";
 import TaskList from "./TaskList";
-import { useMemo, useEffect, useState } from "react";
-import { extractTimeFromStatus, getCleanStatus } from "../utils/timeUtils";
+import { useMemo, useEffect, useState, useRef } from "react";
 
 interface StatusPanelProps {
   status: string;
@@ -15,10 +14,7 @@ interface StatusPanelProps {
   baseColor?: string;
   mood?: string;
   time?: string; // Optional time property from backend
-}
-
-interface TaskWithTime extends Task {
-  time?: string;
+  tasks?: Task[]; // New property: tasks array from SSE
 }
 
 interface Task {
@@ -27,6 +23,32 @@ interface Task {
   completed: boolean;
   time?: string;
 }
+
+// Interface for tracking SSE events
+interface SSEEvent {
+  status: string;
+  progress: number;
+  time?: string;
+  completed?: boolean;
+  timestamp: Date;
+  tasks?: Task[];
+}
+
+/**
+ * Removes timing information from a status message for cleaner display.
+ */
+const getCleanStatus = (text: string): string => {
+  if (!text) return "";
+
+  // Clean different formats of time reporting:
+  // "Color themes generated - 147.7s"
+  // "Brand identity complete - Total: 147.7s"
+  return text
+    .replace(/\s+-\s+\d+\.\d+s$/, "") // Pattern: " - 147.7s" at end of string
+    .replace(/\s+-\s+Total:\s+\d+\.\d+s$/, "") // Pattern: " - Total: 147.7s" at end
+    .replace(/:\s+\d+\.\d+s$/, "") // Pattern: ": 147.7s" at end of string
+    .trim();
+};
 
 const StatusPanel = ({
   status,
@@ -40,159 +62,112 @@ const StatusPanel = ({
   baseColor,
   mood,
   time,
+  tasks: propTasks,
 }: StatusPanelProps) => {
-  const [taskTimes, setTaskTimes] = useState<Record<number, string>>({});
   const [totalTime, setTotalTime] = useState<string>("");
-  const [currentStepTime, setCurrentStepTime] = useState<string | null>(null);
-  const [lastProgressValue, setLastProgressValue] = useState<number>(0);
 
-  // Log status to console
+  // Track all SSE events for debugging
+  const sseEvents = useRef<SSEEvent[]>([]);
+
+  // Log raw props for debugging
+  useEffect(() => {
+    console.log("StatusPanel props:", {
+      status,
+      progress,
+      time: time ? `[${typeof time}] ${time}` : "undefined",
+      tasks: propTasks?.length || 0,
+    });
+  }, [status, progress, time, propTasks]);
+
+  // Add the current SSE event to our tracking array
   useEffect(() => {
     if (status) {
-      console.log(
-        `Status Update: "${getCleanStatus(status)}" (${progress}%) ${
-          time ? `- ${time}s` : ""
-        }`
-      );
-    }
-  }, [status, progress, time]);
-
-  // Handle time updates from the backend 'time' property
-  useEffect(() => {
-    if (time) {
-      // Time property is available from backend - format as seconds
-      const timeValue = `${time}s`;
-      console.log(`Time value from backend: ${timeValue}`);
-
-      // Map progress values to task IDs for completed tasks
-      const progressToTaskMap: Record<number, number> = {
-        30: 2, // Color themes complete - 30% progress
-        45: 3, // Font selection complete - 45% progress
-        70: 4, // Logo prompt complete - 70% progress
-        90: 5, // Image prompts complete - 90% progress
-        100: 6, // Finalizing complete - 100% progress
+      const newEvent: SSEEvent = {
+        status: status,
+        progress: progress,
+        time: time,
+        completed: progress === 100,
+        timestamp: new Date(),
+        tasks: propTasks,
       };
 
-      // Store time for the completed task based on progress
-      const taskId = progressToTaskMap[progress];
-      if (taskId) {
-        console.log(
-          `Setting time for task ${taskId} (progress ${progress}): ${timeValue}`
-        );
-        setTaskTimes((prev) => ({
-          ...prev,
-          [taskId]: timeValue,
-        }));
+      sseEvents.current.push(newEvent);
+      console.log(`Added SSE event #${sseEvents.current.length}:`, newEvent);
 
-        // If this is a completion event (has time), update current step time
-        if (progress < 100) {
-          // For tasks in progress, show their time
-          setCurrentStepTime(timeValue);
-        } else {
-          // For the final task, set total time and clear current step time
-          setCurrentStepTime(null);
-          setTotalTime(timeValue);
-        }
+      // If we reach 100%, log all received events
+      if (progress === 100) {
+        console.log("=== ALL SSE EVENTS ===");
+        sseEvents.current.forEach((event, index) => {
+          console.log(
+            `Event #${index + 1}: Status="${event.status}", Progress=${
+              event.progress
+            }, Time=${event.time || "N/A"}, Tasks=${event.tasks?.length || 0}`
+          );
+        });
+        console.log("=== END SSE EVENTS ===");
       }
     }
-  }, [time, progress]);
+  }, [status, progress, time, propTasks]);
 
-  // Extract time from status message as fallback if 'time' property isn't provided
+  // Update total time when the final task is completed
   useEffect(() => {
-    if (status && !time) {
-      const extractedTime = extractTimeFromStatus(status);
-      if (extractedTime) {
-        console.log(
-          `Extracted time from status: ${extractedTime} (fallback method)`
-        );
-
-        // Direct mapping of specific status messages to task IDs
-        const statusToTaskMap: Record<string, number> = {
-          "Color themes generated": 2,
-          "Fonts selected": 3,
-          "Logo prompt created": 4,
-          "Image prompts created": 5,
-          "Brand identity complete": 6,
-        };
-
-        // Match status message to task ID
-        const cleanStatus = getCleanStatus(status);
-        for (const [statusText, taskId] of Object.entries(statusToTaskMap)) {
-          if (cleanStatus.includes(statusText)) {
-            console.log(
-              `Status "${cleanStatus}" matches "${statusText}" - assigning to task ${taskId}`
-            );
-            setTaskTimes((prev) => ({
-              ...prev,
-              [taskId]: extractedTime,
-            }));
-
-            // Update current step time based on progress
-            if (progress < 100) {
-              setCurrentStepTime(extractedTime);
-            } else {
-              setCurrentStepTime(null);
-              setTotalTime(extractedTime);
-            }
-          }
-        }
+    if (propTasks && propTasks.length === 6) {
+      const finalTask = propTasks.find((t) => t.id === 6);
+      if (finalTask?.completed && finalTask?.time) {
+        setTotalTime(finalTask.time);
       }
     }
-  }, [status, time, progress]);
+  }, [propTasks]);
 
-  // Define tasks based on progress and task times
+  // Use tasks from props or create default tasks if none provided
   const tasks = useMemo(() => {
-    const tasksList = [
+    // If we have tasks from props, use them
+    if (propTasks && propTasks.length > 0) {
+      console.log(`Using ${propTasks.length} tasks from props`);
+      return propTasks;
+    }
+
+    // Otherwise, create default tasks based on progress
+    console.log("Creating default tasks based on progress");
+    return [
       {
         id: 1,
         name: "Analyzing brand requirements",
         completed: progress >= 20,
-        time: taskTimes[1] || (progress >= 20 ? "0.1s" : undefined), // Always show 0.1s for first task when completed
+        time: progress >= 20 ? "0.1s" : undefined,
       },
       {
         id: 2,
         name: "Generating color themes",
         completed: progress >= 30,
-        time: taskTimes[2],
+        time: undefined,
       },
       {
         id: 3,
         name: "Selecting font combinations",
-        completed: progress >= 45, // Updated to match backend progress value
-        time: taskTimes[3],
+        completed: progress >= 45,
+        time: undefined,
       },
       {
         id: 4,
         name: "Creating logo prompt",
         completed: progress >= 70,
-        time: taskTimes[4],
+        time: undefined,
       },
       {
         id: 5,
         name: "Building image prompts",
         completed: progress >= 90,
-        time: taskTimes[5],
+        time: undefined,
       },
       {
         id: 6,
         name: "Finalizing brand package",
         completed: progress >= 100,
-        time: taskTimes[6],
+        time: undefined,
       },
     ];
-
-    console.log(
-      "Tasks with times:",
-      tasksList.map((t) => ({
-        id: t.id,
-        name: t.name,
-        completed: t.completed,
-        time: t.time,
-      }))
-    );
-
-    return tasksList;
-  }, [progress, taskTimes]);
+  }, [propTasks, progress]);
 
   // Display status without timing information for cleaner UI
   const displayStatus = getCleanStatus(status);
@@ -233,12 +208,7 @@ const StatusPanel = ({
           <p className="text-md">
             {displayStatus || "Connecting to server..."}
           </p>
-          {currentStepTime && progress < 100 && (
-            <p className="text-sm text-yellow-300 mt-1">
-              <span className="text-gray-400">Time for this step:</span>{" "}
-              {currentStepTime}
-            </p>
-          )}
+
           <p className="text-xs text-gray-500 mt-1">
             {totalTime && (
               <span>

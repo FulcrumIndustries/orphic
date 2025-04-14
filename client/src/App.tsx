@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import BrandForm from "./components/BrandForm";
 import StatusPanel from "./components/StatusPanel";
 import ResultsDisplay from "./components/ResultsDisplay";
-import { extractTimeFromStatus } from "./utils/timeUtils";
 import ColorfulPerlinNoiseSwirl from "./components/ColorfulPerlinNoiseSwirl";
 import "./index.css";
 
@@ -40,6 +39,25 @@ function App() {
   const [logoPrompt, setLogoPrompt] = useState<string>("");
   const [formData, setFormData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [tasksArray, setTasksArray] = useState<any[]>([]);
+
+  // Track all SSE events for debugging
+  const sseEventsRef = useRef<
+    Array<{ time: string; data: any; timestamp: Date }>
+  >([]);
+
+  // Debug function to log all events when complete
+  const logAllEvents = useCallback(() => {
+    console.log("=== ALL RECORDED SSE EVENTS ===");
+    sseEventsRef.current.forEach((event, i) => {
+      console.log(`Event #${i + 1} at ${event.timestamp.toISOString()}:`);
+      console.log(`  Status: ${event.data.status || "N/A"}`);
+      console.log(`  Progress: ${event.data.progress || "N/A"}`);
+      console.log(`  Time: ${event.data.time || "N/A"}`);
+      console.log(`  Completed: ${event.data.completed || false}`);
+    });
+    console.log("=== END OF SSE EVENTS LOG ===");
+  }, []);
 
   // Check for saved jobId on component mount
   useEffect(() => {
@@ -191,6 +209,22 @@ function App() {
           const data = JSON.parse(event.data);
           console.log("Parsed SSE update:", data);
 
+          // Special debug for image prompts
+          if (data.status && data.status.includes("Image prompts created")) {
+            console.log("❗ DETECTED IMAGE PROMPTS CREATED EVENT ❗");
+            console.log("Status:", data.status);
+            console.log("Progress:", data.progress);
+            console.log("Time:", data.time);
+            console.log("Completed:", data.completed);
+          }
+
+          // Record this event for debugging
+          sseEventsRef.current.push({
+            time: new Date().toISOString(),
+            data: data,
+            timestamp: new Date(),
+          });
+
           // Store jobId from message if available
           if (data.jobId && !jobId) {
             console.log(`Received jobId from SSE: ${data.jobId}`);
@@ -199,20 +233,37 @@ function App() {
 
           // Immediately update status and progress if provided
           if (data.status) {
+            console.log(`Setting status: "${data.status}"`);
             setProcessingStatus(data.status);
+            setStatus(data.status);
           }
 
           if (typeof data.progress === "number") {
+            console.log(`Setting progress: ${data.progress}%`);
             setProgress(data.progress);
           }
 
-          // Extract time information from status message
-          if (data.status) {
-            const time = extractTimeFromStatus(data.status);
-            if (time) {
-              console.log(`Time for current step: ${time}`);
-              setTimeElapsed(time);
-            }
+          // Store the tasks array if available
+          if (data.tasks && Array.isArray(data.tasks)) {
+            console.log(
+              `Received ${data.tasks.length} tasks from server:`,
+              data.tasks
+            );
+            setTasksArray(data.tasks);
+          }
+
+          // Store the time value from SSE message if available
+          if (data.time) {
+            console.log(
+              `Time value from SSE: ${data.time} (${typeof data.time})`
+            );
+
+            // Ensure it's treated as a string to avoid precision issues
+            const timeStr = String(data.time);
+            console.log(`Using time: ${timeStr}`);
+
+            // Don't add "s" suffix - StatusPanel expects just the number
+            setTimeElapsed(timeStr);
           }
 
           // Update partial results based on progress
@@ -232,6 +283,10 @@ function App() {
           // When processing is complete, fetch the results
           if (data.completed) {
             console.log("Processing complete, fetching results");
+
+            // Log all SSE events for debugging
+            logAllEvents();
+
             // First check if we received a jobId in this message
             if (data.jobId) {
               console.log(`Using jobId from SSE message: ${data.jobId}`);
@@ -383,9 +438,9 @@ function App() {
         fetchResults(data.jobId);
 
         // Save the time information if provided
-        const extractedTime = extractTimeFromStatus(data.status);
-        if (extractedTime) {
-          setTimeElapsed(extractedTime);
+        if (data.time) {
+          const timeStr = String(data.time);
+          setTimeElapsed(timeStr);
         }
       }
     }
@@ -778,8 +833,10 @@ function App() {
                   status={processingStatus}
                   progress={progress}
                   jobId={jobId || undefined}
-                  timeElapsed={timeElapsed || undefined}
+                  timeElapsed={timeElapsed ? `${timeElapsed}s` : undefined}
                   handleReset={handleReset}
+                  time={timeElapsed || undefined}
+                  tasks={tasksArray}
                 />
               </div>
 
@@ -832,13 +889,15 @@ function App() {
                 status="Brand identity complete"
                 progress={100}
                 jobId={jobId || undefined}
-                timeElapsed={timeElapsed || undefined}
+                timeElapsed={timeElapsed ? `${timeElapsed}s` : undefined}
                 handleReset={handleReset}
                 brandName={formData?.brandName}
                 brandDescription={formData?.brandDescription}
                 colorSchemeType={formData?.colorSchemeType}
                 baseColor={formData?.baseColor}
                 mood={formData?.mood}
+                time={timeElapsed || undefined}
+                tasks={tasksArray}
               />
             </div>
             <div className="lg:col-span-8">

@@ -43,6 +43,8 @@ exports.generateLogoPrompt = async (brandName, brandDescription, colorTheme) => 
       4. Any minimal graphical elements that could enhance the typography
       5. The overall mood and feel the logo should convey
 
+      Don't describe a particular file format for the logo, just describe the prompt for the logo.
+
       Format your response using Markdown.
     `;
 

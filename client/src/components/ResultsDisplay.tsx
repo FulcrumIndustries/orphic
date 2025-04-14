@@ -7,6 +7,7 @@ import {
 } from "./SkeletonLoading";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ArrowLongLeftIcon } from "@heroicons/react/24/solid";
 
 // Add a helper function to ensure markdown content is always a string
 const ensureString = (content: any): string => {
@@ -439,13 +440,10 @@ const ResultsDisplay = ({
     if (!colors || colors.length < 2) return null;
 
     const primaryColor = colors[0].hex;
-    const accentColor = colors[1].hex;
-    const textColor =
-      colors.find((c) => c.usage.toLowerCase().includes("text"))?.hex ||
-      "#333333";
-    const backgroundColor =
-      colors.find((c) => c.usage.toLowerCase().includes("background"))?.hex ||
-      "#F5F5F5";
+    const secondaryColor = colors[1].hex;
+    const accentColor = colors[2].hex;
+    const backgroundColor = colors[3].hex;
+    const textColor = colors[4].hex;
 
     return (
       <div className="mt-8 border rounded-lg p-6 bg-white shadow-sm">
@@ -470,19 +468,33 @@ const ResultsDisplay = ({
               >
                 Primary Button
               </button>
+
               <button
-                className="w-full py-2 px-4 rounded-md font-medium shadow-sm transition-colors border"
+                className="w-full py-2 px-4 rounded-md font-medium text-white shadow-sm transition-colors"
                 style={{
-                  color: primaryColor,
-                  borderColor: primaryColor,
-                  backgroundColor: "transparent",
+                  backgroundColor: secondaryColor,
+                  borderColor: accentColor,
                 }}
               >
                 Secondary Button
               </button>
               <button
-                className="w-full py-2 px-4 rounded-md font-medium text-white shadow-sm transition-colors"
-                style={{ backgroundColor: accentColor }}
+                className="w-full py-2 px-4 rounded-md font-medium shadow-sm transition-colors border"
+                style={{
+                  color: backgroundColor,
+                  borderColor: accentColor,
+                  backgroundColor: accentColor,
+                }}
+              >
+                Accent Button
+              </button>
+              <button
+                className="w-full py-2 px-4 rounded-md font-medium shadow-sm transition-colors border"
+                style={{
+                  color: accentColor,
+                  borderColor: accentColor,
+                  backgroundColor: "transparent",
+                }}
               >
                 Accent Button
               </button>
@@ -509,6 +521,7 @@ const ResultsDisplay = ({
                   style={{
                     borderColor: `${primaryColor}40`,
                     backgroundColor: backgroundColor,
+                    color: textColor,
                   }}
                 />
               </div>
@@ -593,11 +606,11 @@ const ResultsDisplay = ({
                 ></div>
                 <div
                   className="h-4 w-4 rounded-full"
-                  style={{ backgroundColor: accentColor }}
+                  style={{ backgroundColor: secondaryColor }}
                 ></div>
                 <div
                   className="h-4 w-4 rounded-full"
-                  style={{ backgroundColor: colors[2]?.hex || primaryColor }}
+                  style={{ backgroundColor: accentColor }}
                 ></div>
               </div>
             </div>
@@ -796,45 +809,96 @@ const ResultsDisplay = ({
                       }}
                     >
                       <div
-                        className="h-24 w-full"
+                        className="h-24 w-full relative"
                         style={{ backgroundColor: color.hex }}
-                      ></div>
+                      >
+                        {/* Add color role badge */}
+                        <div className="absolute top-2 right-2 bg-white bg-opacity-90 text-xs px-2 py-1 rounded-full shadow-sm font-medium">
+                          {index === 0
+                            ? "Primary"
+                            : index === 1
+                            ? "Secondary"
+                            : index === 2
+                            ? "Accent"
+                            : color.usage.toLowerCase().includes("background")
+                            ? "Background"
+                            : color.usage.toLowerCase().includes("text")
+                            ? "Text"
+                            : `Color ${index + 1}`}
+                        </div>
+                      </div>
                       <div className="p-3">
                         <h4 className="font-medium">{color.name}</h4>
+
+                        {/* Color hex code with copy button */}
                         <div className="flex items-center mb-1">
-                          <p className="text-sm text-gray-600 mr-2">
-                            {color.hex}
-                          </p>
+                          <span className="text-xs text-gray-500 mr-1">
+                            HEX:
+                          </span>
+                          <span className="text-xs font-mono text-gray-600 mr-1">
+                            {color.hex.toUpperCase()}
+                          </span>
                           <button
                             onClick={() =>
                               copyToClipboard(color.hex, `color-hex-${index}`)
                             }
-                            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded px-2 py-1 focus:outline-none transition-colors"
+                            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded p-1 focus:outline-none transition-colors ml-auto"
                             title="Copy hex code"
                           >
                             {copiedText === `color-hex-${index}` ? (
-                              <span className="text-green-600">Copied!</span>
+                              <span className="text-green-600">✓</span>
                             ) : (
-                              <span>Copy</span>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3 w-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                                />
+                              </svg>
                             )}
                           </button>
                         </div>
-                        <div className="flex items-center text-sm text-gray-600 mb-1">
-                          <span className="mr-2">({color.rgb})</span>
+
+                        {/* Color RGB code with copy button */}
+                        <div className="flex items-center text-xs mb-2">
+                          <span className="font-mono text-gray-600 whitespace-nowrap overflow-hidden text-ellipsis">
+                            {color.rgb.replace(/ /g, "")}
+                          </span>
                           <button
                             onClick={() =>
                               copyToClipboard(color.rgb, `color-rgb-${index}`)
                             }
-                            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded px-2 py-1 focus:outline-none transition-colors"
+                            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded p-1 focus:outline-none transition-colors ml-auto flex-shrink-0"
                             title="Copy RGB value"
                           >
                             {copiedText === `color-rgb-${index}` ? (
-                              <span className="text-green-600">Copied!</span>
+                              <span className="text-green-600">✓</span>
                             ) : (
-                              <span>Copy</span>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3 w-3"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"
+                                />
+                              </svg>
                             )}
                           </button>
                         </div>
+
                         <p className="text-xs text-gray-500 mt-2">
                           {color.usage}
                         </p>
@@ -1008,7 +1072,7 @@ const ResultsDisplay = ({
                   <div className="p-4 bg-white">
                     {typeof results.logoPrompt.prompt === "string" ? (
                       // String-based prompt with markdown formatting
-                      <div className="prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-headings:text-gray-800 prose-headings:pb-1 prose-headings:mb-3 prose-p:my-2 prose-strong:text-gray-900 prose-strong:font-semibold prose-li:my-1">
+                      <div className="text-sm prose prose-sm max-w-none text-gray-700 prose-headings:font-bold prose-headings:text-gray-800 prose-headings:pb-1 prose-headings:mb-3 prose-p:my-2 prose-strong:text-gray-900 prose-strong:font-semibold prose-li:my-1">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {formatStringPrompt(results.logoPrompt.prompt)}
                         </ReactMarkdown>
@@ -1216,7 +1280,7 @@ const ResultsDisplay = ({
                               </button>
                             </div>
                             <div className="p-4 bg-white">
-                              <p className="text-gray-700 whitespace-pre-line">
+                              <p className="text-sm text-gray-700 whitespace-pre-line">
                                 {prompt}
                               </p>
                             </div>
