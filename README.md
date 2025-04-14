@@ -4,8 +4,8 @@ Orphic is a creative design assistant that takes a brand name and a brief descri
 
 ## Screenshot
 
-![Orphic](orphic0.png)
-![Orphic](orphic1.png)
+![Orphic](orphic0.PNG)
+![Orphic](orphic1.PNG)
 
 ## Features
 
